@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tweet Pulse — Sentiment Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #080b0f;
+  --surface: #0f1318;
+  --surface2: #161c24;
+  --border: rgba(255,255,255,0.07);
+  --text: #e8edf2;
+  --muted: #5a6475;
+  --accent: #00d4ff;
+  --accent2: #ff6b35;
+  --green: #00e676;
+  --red: #ff4757;
+  --yellow: #ffd32a;
+  --purple: #a855f7;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background:
+    radial-gradient(ellipse 40% 30% at 70% 20%, rgba(0,212,255,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 30% 40% at 20% 80%, rgba(255,107,53,0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 48px 24px 100px; }
+
+/* ── HEADER ── */
+.header { margin-bottom: 56px; }
+.header-top { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+.logo-mark {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.app-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.app-name span { color: var(--accent); }
+.tagline { font-size: 11px; color: var(--muted); letter-spacing: 0.12em; margin-left: 52px; }
+
+/* ── SEARCH ── */
+.search-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 32px;
+}
+.search-label { font-size: 10px; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; }
+.search-row { display: flex; gap: 0; }
+.search-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  padding: 14px 18px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-input::placeholder { color: var(--muted); }
+.search-input:focus { border-color: var(--accent); }
+.search-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 0 8px 8px 0;
+  padding: 14px 28px;
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bg);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+.search-btn:hover:not(:disabled) { opacity: 0.85; }
+.search-btn:active:not(:disabled) { transform: scale(0.98); }
+.search-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── PROGRESS ── */
+.progress-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px 28px;
+  text-align: center;
+  margin-bottom: 32px;
+}
+.progress-steps { display: flex; justify-content: center; gap: 32px; margin-bottom: 28px; }
+.step {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  font-size: 10px; letter-spacing: 0.15em; color: var(--muted);
+  text-transform: uppercase; transition: color 0.3s;
+}
+.step.active { color: var(--accent); }
+.step.done { color: var(--green); }
+.step-dot {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+.step.active .step-dot {
+  background: rgba(0,212,255,0.1);
+  animation: pulse 1.5s infinite;
+}
+.step.done .step-dot { background: rgba(0,230,118,0.1); }
+.progress-text { font-size: 13px; color: var(--muted); }
+.progress-text strong { color: var(--text); }
+
+/* ── ERROR ── */
+.error-card {
+  background: rgba(255,71,87,0.06);
+  border: 1px solid rgba(255,71,87,0.3);
+  border-radius: 12px;
+  padding: 20px 24px;
+  font-size: 12px;
+  color: var(--red);
+  margin-bottom: 24px;
+}
+
+/* ── REPORT ── */
+.report { animation: fadeUp 0.5s forwards; }
+
+.report-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 20px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  flex-wrap: wrap;
+}
+.report-meta { flex: 1; }
+.report-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.report-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 12px;
+}
+.report-summary { font-size: 12px; line-height: 1.7; color: rgba(232,237,242,0.7); }
+
+.impact-badge {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 28px;
+  min-width: 120px;
+}
+.impact-score {
+  font-family: 'Syne', sans-serif;
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.impact-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+/* ── GRID ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+@media (max-width: 680px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .report-header { flex-direction: column; }
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+.card-title {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+
+/* ── SENTIMENT BAR ── */
+.sentiment-row { display: flex; flex-direction: column; gap: 12px; }
+.sentiment-item { display: flex; flex-direction: column; gap: 6px; }
+.sentiment-top { display: flex; justify-content: space-between; align-items: center; }
+.sentiment-name { font-size: 11px; }
+.sentiment-pct { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; }
+.bar-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+.bar-positive { background: var(--green); }
+.bar-negative { background: var(--red); }
+.bar-neutral { background: var(--muted); }
+
+/* ── STAT BOXES ── */
+.stat-box {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+.stat-label { font-size: 10px; color: var(--muted); letter-spacing: 0.1em; margin-top: 6px; }
+
+/* ── EMOTIONS ── */
+.emotions-list { display: flex; flex-direction: column; gap: 10px; }
+.emotion-item { display: flex; align-items: center; gap: 12px; }
+.emotion-name { font-size: 12px; min-width: 100px; }
+.emotion-bar-track { flex: 1; height: 4px; background: var(--surface2); border-radius: 2px; }
+.emotion-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--purple), var(--accent)); }
+.emotion-pct { font-size: 11px; color: var(--muted); min-width: 36px; text-align: right; }
+
+/* ── TOPICS ── */
+.topics-list { display: flex; flex-direction: column; gap: 8px; }
+.topic-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.topic-name { flex: 1; }
+.topic-count { color: var(--muted); font-size: 10px; margin-right: 10px; }
+.topic-sentiment {
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ts-positive { background: rgba(0,230,118,0.12); color: var(--green); }
+.ts-negative { background: rgba(255,71,87,0.12); color: var(--red); }
+.ts-neutral { background: rgba(90,100,117,0.2); color: var(--muted); }
+
+/* ── USERS ── */
+.users-list { display: flex; flex-direction: column; gap: 10px; }
+.user-item {
+  padding: 14px;
+  background: var(--surface2);
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+}
+.user-item.positive { border-left-color: var(--green); }
+.user-item.negative { border-left-color: var(--red); }
+.user-item.neutral { border-left-color: var(--muted); }
+.user-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.user-handle { font-size: 12px; color: var(--accent); }
+.user-followers { font-size: 10px; color: var(--muted); }
+.user-comment { font-size: 11px; color: rgba(232,237,242,0.65); line-height: 1.5; }
+
+/* ── INSIGHTS ── */
+.insights-list { display: flex; flex-direction: column; gap: 10px; }
+.insight-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.insight-num {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 16px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+/* ── RECOMMENDATION ── */
+.recommendation {
+  background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(255,107,53,0.05));
+  border: 1px solid rgba(0,212,255,0.15);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.rec-title { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+.rec-text { font-size: 13px; line-height: 1.7; }
+
+/* ── EXPORT ── */
+.export-row { display: flex; gap: 12px; justify-content: flex-end; margin-bottom: 20px; }
+.export-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; gap: 8px;
+}
+.export-btn:hover { border-color: var(--accent); color: var(--accent); }
+.export-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+.export-btn.primary:hover { opacity: 0.85; }
+
+/* ── FOOTER ── */
+.footer { text-align: center; font-size: 10px; letter-spacing: 0.15em; color: rgba(90,100,117,0.4); margin-top: 60px; text-transform: uppercase; }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(0,212,255,0.3); } 50% { box-shadow: 0 0 0 8px rgba(0,212,255,0); } }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-top">
+      <div class="logo-mark">⚡</div>
+      <div class="app-name">Tweet<span>Pulse</span></div>
+    </div>
+    <div class="tagline">Sentiment Analysis &amp; Impact Report · Powered by Claude AI</div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="search-card">
+    <div class="search-label">URL del Tweet a analizar</div>
+    <div class="search-row">
+      <input
+        type="text"
+        class="search-input"
+        id="tweetInput"
+        placeholder="https://twitter.com/usuario/status/123456789..."
+        onkeydown="if(event.key==='Enter') analyze()"
+      />
+      <button class="search-btn" id="searchBtn" onclick="analyze()">Analizar →</button>
+    </div>
+  </div>
+
+  <!-- DYNAMIC CONTENT -->
+  <div id="content"></div>
+
+  <div class="footer">TweetPulse · Beta v1.0 · Powered by Apify + Claude AI</div>
+</div>
+
+<script>
+let currentReport = null;
+
+async function analyze() {
+  const url = document.getElementById('tweetInput').value.trim();
+  if (!url) return alert('Por favor ingresá la URL del tweet');
+  if (!url.includes('twitter.com') && !url.includes('x.com')) {
+    return alert('La URL debe ser de Twitter/X');
+  }
+
+  document.getElementById('searchBtn').disabled = true;
+  showProgress('scraping');
+
+  try {
+    // Step 1: Scrape
+    showProgress('scraping');
+    const scrapeRes = await fetch('/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tweetUrl: url }),
+    });
+
+    if (!scrapeRes.ok) {
+      const err = await scrapeRes.json();
+      throw new Error(err.error || `Scrape error ${scrapeRes.status}`);
+    }
+
+    const scrapeData = await scrapeRes.json();
+
+    if (!scrapeData.comments || scrapeData.comments.length === 0) {
+      throw new Error('No se encontraron comentarios en este tweet. Puede ser privado o no tener replies.');
+    }
+
+    // Step 2: Analyze
+    showProgress('analyzing', scrapeData.totalComments);
+    const analyzeRes = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comments: scrapeData.comments, tweetUrl: url }),
+    });
+
+    if (!analyzeRes.ok) {
+      const err = await analyzeRes.json();
+      throw new Error(err.error || `Analyze error ${analyzeRes.status}`);
+    }
+
+    const report = await analyzeRes.json();
+    report.tweetUrl = url;
+    report.scrapedAt = new Date().toLocaleString('es-AR');
+
+    currentReport = report;
+    showReport(report);
+
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    document.getElementById('searchBtn').disabled = false;
+  }
+}
+
+function showProgress(step, count) {
+  const steps = [
+    { id: 'scraping', label: 'Obteniendo comentarios', icon: '⬇' },
+    { id: 'analyzing', label: 'Analizando con IA', icon: '🧠' },
+  ];
+  const currentIdx = steps.findIndex(s => s.id === step);
+
+  document.getElementById('content').innerHTML = `
+    <div class="progress-card">
+      <div class="progress-steps">
+        ${steps.map((s, i) => `
+          <div class="step ${i < currentIdx ? 'done' : i === currentIdx ? 'active' : ''}">
+            <div class="step-dot">${i < currentIdx ? '✓' : s.icon}</div>
+            <span>${s.label}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="progress-text">
+        ${step === 'scraping'
+          ? '<strong>Conectando con Apify...</strong> esto puede tomar ~20 segundos'
+          : `<strong>Procesando ${count} comentarios</strong> con Claude AI...`
+        }
+      </div>
+    </div>`;
+}
+
+function showError(msg) {
+  document.getElementById('content').innerHTML = `
+    <div class="error-card">⚠ Error: ${msg}</div>`;
+}
+
+function showReport(r) {
+  const sentColors = { positive: 'positive', negative: 'negative', neutral: 'neutral' };
+
+  document.getElementById('content').innerHTML = `
+    <div class="report">
+
+      <!-- Export buttons -->
+      <div class="export-row">
+        <button class="export-btn" onclick="exportJSON()">⬇ JSON</button>
+        <button class="export-btn primary" onclick="exportHTML()">⬇ Exportar Reporte</button>
+      </div>
+
+      <!-- Header card -->
+      <div class="report-header">
+        <div class="report-meta">
+          <div class="report-label">Reporte generado el ${r.scrapedAt}</div>
+          <div class="report-title">${r.brand ? r.brand + ' · ' : ''}${r.perfumeName || 'Análisis de Sentimiento'}</div>
+          <div class="report-summary">${r.summary}</div>
+        </div>
+        <div class="impact-badge">
+          <div class="impact-score">${r.impactScore}</div>
+          <div class="impact-label">Impacto ${r.impactLabel}</div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="grid-3" style="margin-bottom:20px">
+        <div class="card" style="padding:20px">
+          <div class="stat-box">
+            <div class="stat-value">${r.totalComments}</div>
+            <div class="stat-label">Comentarios totales</div>
+          </div>
+        </div>
+        <div class="card" style="padding:20px">
+          <div class="stat-box">
+            <div class="stat-value" style="color:var(--green)">${r.sentiment?.positive ?? 0}%</div>
+            <div class="stat-label">Sentimiento positivo</div>
+          </div>
+        </div>
+        <div class="card" style="padding:20px">
+          <div class="stat-box">
+            <div class="stat-value" style="color:var(--red)">${r.sentiment?.negative ?? 0}%</div>
+            <div class="stat-label">Sentimiento negativo</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sentiment + Emotions -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Distribución de Sentimiento</div>
+          <div class="sentiment-row">
+            ${[
+              { key: 'positive', label: 'Positivo', cls: 'bar-positive', color: 'var(--green)' },
+              { key: 'negative', label: 'Negativo', cls: 'bar-negative', color: 'var(--red)' },
+              { key: 'neutral',  label: 'Neutral',  cls: 'bar-neutral',  color: 'var(--muted)' },
+            ].map(s => `
+              <div class="sentiment-item">
+                <div class="sentiment-top">
+                  <span class="sentiment-name">${s.label}</span>
+                  <span class="sentiment-pct" style="color:${s.color}">${r.sentiment?.[s.key] ?? 0}%</span>
+                </div>
+                <div class="bar-track">
+                  <div class="bar-fill ${s.cls}" style="width:${r.sentiment?.[s.key] ?? 0}%"></div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Emociones Predominantes</div>
+          <div class="emotions-list">
+            ${(r.emotions || []).map(e => `
+              <div class="emotion-item">
+                <span class="emotion-name">${e.name}</span>
+                <div class="emotion-bar-track">
+                  <div class="emotion-bar-fill" style="width:${e.percentage}%"></div>
+                </div>
+                <span class="emotion-pct">${e.percentage}%</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Topics + Users -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Temas Más Mencionados</div>
+          <div class="topics-list">
+            ${(r.topics || []).map(t => `
+              <div class="topic-item">
+                <span class="topic-name">${t.topic}</span>
+                <span class="topic-count">${t.count} menciones</span>
+                <span class="topic-sentiment ts-${t.sentiment}">${t.sentiment}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Usuarios Más Influyentes</div>
+          <div class="users-list">
+            ${(r.influentialUsers || []).map(u => `
+              <div class="user-item ${u.sentiment}">
+                <div class="user-header">
+                  <span class="user-handle">@${u.username}</span>
+                  <span class="user-followers">${u.followers.toLocaleString()} seguidores</span>
+                </div>
+                <div class="user-comment">"${u.comment}"</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Insights -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">Key Insights</div>
+        <div class="insights-list">
+          ${(r.keyInsights || []).map((ins, i) => `
+            <div class="insight-item">
+              <span class="insight-num">${i + 1}</span>
+              <span>${ins}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Recommendation -->
+      <div class="recommendation">
+        <div class="rec-title">★ Recomendación</div>
+        <div class="rec-text">${r.recommendation}</div>
+      </div>
+
+    </div>`;
+}
+
+function exportJSON() {
+  if (!currentReport) return;
+  const blob = new Blob([JSON.stringify(currentReport, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tweetpulse-report-${Date.now()}.json`;
+  a.click();
+}
+
+function exportHTML() {
+  if (!currentReport) return;
+  const content = document.getElementById('content').innerHTML;
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>TweetPulse Report — ${new Date().toLocaleDateString('es-AR')}</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+${document.querySelector('style').innerHTML}
+body { padding: 40px; }
+.export-row, .search-card, .header { display: none; }
+</style>
+</head>
+<body><div class="app">${content}</div></body>
+</html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tweetpulse-report-${Date.now()}.html`;
+  a.click();
+}
+</script>
+</body>
+</html>
